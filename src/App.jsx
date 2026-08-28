@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Camera, Plus, Droplet, User, Flame, Trash2, Check, X, RefreshCw, ImagePlus,
   ChevronLeft, ChevronRight, Sparkles, TrendingDown, TrendingUp, Info, Mic, Type,
-  Star, Target, Download, Utensils, Loader2, Upload, Pill, AlertTriangle, HeartPulse
+  Star, Target, Download, Utensils, Loader2, Upload, Pill, AlertTriangle, HeartPulse,
+  Eye, EyeOff, CheckCircle2, Circle
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, ResponsiveContainer, Cell, LineChart, Line, YAxis, Tooltip
@@ -956,57 +957,155 @@ function Screen({ children }) {
   );
 }
 
+const pwRules = (pw) => [
+  { label: "At least 8 characters", ok: pw.length >= 8 },
+  { label: "Upper & lowercase letters", ok: /[a-z]/.test(pw) && /[A-Z]/.test(pw) },
+  { label: "At least one number", ok: /[0-9]/.test(pw) },
+];
+
 function AuthScreen() {
-  const [mode, setMode] = useState("signin");
+  const [mode, setMode] = useState("signin"); // signin | signup | reset
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const rules = pwRules(pw);
+  const pwValid = rules.every((r) => r.ok);
+  const canSubmit = mode === "reset"
+    ? email.includes("@") && !busy
+    : email.includes("@") && (mode === "signin" ? pw.length > 0 : pwValid) && !busy;
+
   const submit = async () => {
-    if (!email || !pw) { setErr("Enter your email and password."); return; }
-    if (mode === "signup" && pw.length < 6) { setErr("Use a password of at least 6 characters."); return; }
+    if (!canSubmit) { if (mode === "signup" && !pwValid) setErr("Please meet all password requirements."); return; }
     setBusy(true); setErr(""); setMsg("");
     try {
       if (mode === "signin") {
         const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
         if (error) setErr(error.message);
-      } else {
+      } else if (mode === "signup") {
         const { data, error } = await supabase.auth.signUp({ email, password: pw });
         if (error) setErr(error.message);
         else if (!data.session) setMsg("Account created. Check your email to confirm, then sign in.");
+      } else {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+        if (error) setErr(error.message);
+        else setMsg("If that email has an account, a reset link is on its way. Check your inbox.");
       }
     } catch { setErr("Something went wrong. Please try again."); }
     setBusy(false);
   };
-  const inp = { width: "100%", border: `1px solid ${C.line}`, borderRadius: 12, padding: "11px 13px", fontSize: 15, color: C.ink, outline: "none", background: C.paper };
+  const go = (m) => { setMode(m); setErr(""); setMsg(""); };
+
+  const inp = { width: "100%", border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 13px", fontSize: 15, color: C.ink, outline: "none", background: "#fff" };
+  const heading = mode === "signin" ? "Sign in" : mode === "signup" ? "Create your account" : "Reset your password";
+  const cta = busy ? "One moment…" : mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset link";
+
   return (
     <Screen>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 22 }}>
-        <Logo size={52} />
-        <div style={{ fontFamily: "Fraunces, serif", fontWeight: 700, fontSize: 26, color: C.ink, marginTop: 12 }}>Nutracked</div>
-        <div style={{ color: C.inkSoft, fontSize: 14, marginTop: 2 }}>{mode === "signin" ? "Welcome back" : "Create your account"}</div>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 24 }}>
+        <Logo size={54} />
+        <div style={{ fontFamily: "Fraunces, serif", fontWeight: 700, fontSize: 28, color: C.ink, marginTop: 14, letterSpacing: "-.01em" }}>Nutracked</div>
+        <div style={{ color: C.inkSoft, fontSize: 14, marginTop: 4, textAlign: "center", maxWidth: 260, lineHeight: 1.4 }}>Track your nutrition and make sense of your bloodwork.</div>
       </div>
-      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 18, padding: 20 }}>
-        <label style={{ display: "block", marginBottom: 12 }}>
+
+      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 20, padding: 22, boxShadow: "0 1px 3px rgba(27,36,30,.04)" }}>
+        <div style={{ fontFamily: "Fraunces, serif", fontWeight: 600, fontSize: 19, color: C.ink, marginBottom: 16 }}>{heading}</div>
+
+        {mode === "reset" && <div style={{ fontSize: 13, color: C.inkSoft, marginTop: -8, marginBottom: 16, lineHeight: 1.5 }}>Enter your email and we'll send you a link to set a new password.</div>}
+
+        <label style={{ display: "block", marginBottom: mode === "reset" ? 14 : 12 }}>
           <div style={{ fontSize: 12, color: C.inkSoft, fontWeight: 600, marginBottom: 6 }}>Email</div>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" style={inp} />
+          <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" onKeyDown={(e) => e.key === "Enter" && submit()} style={inp} />
         </label>
-        <label style={{ display: "block", marginBottom: 14 }}>
-          <div style={{ fontSize: 12, color: C.inkSoft, fontWeight: 600, marginBottom: 6 }}>Password</div>
-          <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="At least 6 characters" onKeyDown={(e) => e.key === "Enter" && submit()} style={inp} />
-        </label>
-        {err && <div style={{ color: C.warn, fontSize: 13, marginBottom: 10 }}>{err}</div>}
-        {msg && <div style={{ color: C.good, fontSize: 13, marginBottom: 10 }}>{msg}</div>}
-        <button onClick={submit} disabled={busy} style={{ width: "100%", background: C.ink, color: C.paper, border: "none", borderRadius: 12, padding: "13px", cursor: "pointer", fontWeight: 700, opacity: busy ? 0.6 : 1 }}>
-          {busy ? "One moment…" : mode === "signin" ? "Sign in" : "Create account"}
-        </button>
+
+        {mode !== "reset" && (
+          <label style={{ display: "block", marginBottom: mode === "signup" ? 10 : 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <div style={{ fontSize: 12, color: C.inkSoft, fontWeight: 600 }}>Password</div>
+              {mode === "signin" && <button type="button" onClick={() => go("reset")} style={{ background: "none", border: "none", color: C.good, fontWeight: 600, cursor: "pointer", fontSize: 12 }}>Forgot password?</button>}
+            </div>
+            <div style={{ position: "relative" }}>
+              <input type={showPw ? "text" : "password"} autoComplete={mode === "signin" ? "current-password" : "new-password"} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={mode === "signin" ? "Your password" : "Create a password"} onKeyDown={(e) => e.key === "Enter" && submit()} style={{ ...inp, paddingRight: 44 }} />
+              <button type="button" onClick={() => setShowPw((s) => !s)} aria-label={showPw ? "Hide password" : "Show password"} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: C.inkSoft, padding: 6, display: "grid", placeItems: "center" }}>
+                {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
+            </div>
+          </label>
+        )}
+
+        {mode === "signup" && (
+          <div style={{ margin: "6px 0 14px" }}>
+            {rules.map((r, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: r.ok ? C.good : C.inkSoft, marginBottom: 4 }}>
+                {r.ok ? <CheckCircle2 size={14} /> : <Circle size={14} />} {r.label}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {err && <div style={{ color: C.warn, fontSize: 13, marginBottom: 12, marginTop: 6, background: "#fdf3f1", border: `1px solid ${C.warn}44`, borderRadius: 10, padding: "8px 10px" }}>{err}</div>}
+        {msg && <div style={{ color: C.good, fontSize: 13, marginBottom: 12, marginTop: 6, background: "#f1f7f3", border: `1px solid ${C.good}44`, borderRadius: 10, padding: "8px 10px" }}>{msg}</div>}
+
+        <button onClick={submit} disabled={!canSubmit} style={{ width: "100%", marginTop: 6, background: C.ink, color: C.paper, border: "none", borderRadius: 12, padding: "13px", cursor: canSubmit ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 15, opacity: canSubmit ? 1 : 0.45, transition: "opacity .15s" }}>{cta}</button>
       </div>
-      <div style={{ textAlign: "center", marginTop: 16, fontSize: 14, color: C.inkSoft }}>
-        {mode === "signin" ? "New here? " : "Already have an account? "}
-        <button onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setErr(""); setMsg(""); }} style={{ background: "none", border: "none", color: C.good, fontWeight: 600, cursor: "pointer", fontSize: 14 }}>
-          {mode === "signin" ? "Create an account" : "Sign in"}
-        </button>
+
+      <div style={{ textAlign: "center", marginTop: 18, fontSize: 14, color: C.inkSoft }}>
+        {mode === "reset" ? (
+          <button onClick={() => go("signin")} style={{ background: "none", border: "none", color: C.good, fontWeight: 700, cursor: "pointer", fontSize: 14 }}>← Back to sign in</button>
+        ) : (
+          <>
+            {mode === "signin" ? "New to Nutracked? " : "Already have an account? "}
+            <button onClick={() => go(mode === "signin" ? "signup" : "signin")} style={{ background: "none", border: "none", color: C.good, fontWeight: 700, cursor: "pointer", fontSize: 14 }}>
+              {mode === "signin" ? "Create an account" : "Sign in"}
+            </button>
+          </>
+        )}
+      </div>
+
+      <div style={{ textAlign: "center", marginTop: 20, fontSize: 11, color: C.inkSoft, lineHeight: 1.5, maxWidth: 300, marginLeft: "auto", marginRight: "auto" }}>Nutracked offers educational estimates, not medical advice.</div>
+    </Screen>
+  );
+}
+
+function UpdatePasswordScreen({ onDone }) {
+  const [pw, setPw] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const rules = pwRules(pw);
+  const valid = rules.every((r) => r.ok);
+  const save = async () => {
+    if (!valid) { setErr("Please meet all password requirements."); return; }
+    setBusy(true); setErr("");
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pw });
+      if (error) setErr(error.message); else onDone();
+    } catch { setErr("Something went wrong. Please try again."); }
+    setBusy(false);
+  };
+  const inp = { width: "100%", border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 13px", fontSize: 15, color: C.ink, outline: "none", background: "#fff" };
+  return (
+    <Screen>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 24 }}>
+        <Logo size={54} />
+        <div style={{ fontFamily: "Fraunces, serif", fontWeight: 700, fontSize: 26, color: C.ink, marginTop: 14 }}>Set a new password</div>
+      </div>
+      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 20, padding: 22 }}>
+        <label style={{ display: "block", marginBottom: 8 }}>
+          <div style={{ fontSize: 12, color: C.inkSoft, fontWeight: 600, marginBottom: 6 }}>New password</div>
+          <div style={{ position: "relative" }}>
+            <input type={showPw ? "text" : "password"} autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Create a password" onKeyDown={(e) => e.key === "Enter" && save()} style={{ ...inp, paddingRight: 44 }} />
+            <button type="button" onClick={() => setShowPw((s) => !s)} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: C.inkSoft, padding: 6, display: "grid", placeItems: "center" }}>{showPw ? <EyeOff size={17} /> : <Eye size={17} />}</button>
+          </div>
+        </label>
+        <div style={{ margin: "6px 0 14px" }}>
+          {rules.map((r, i) => <div key={i} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: r.ok ? C.good : C.inkSoft, marginBottom: 4 }}>{r.ok ? <CheckCircle2 size={14} /> : <Circle size={14} />} {r.label}</div>)}
+        </div>
+        {err && <div style={{ color: C.warn, fontSize: 13, marginBottom: 12, background: "#fdf3f1", border: `1px solid ${C.warn}44`, borderRadius: 10, padding: "8px 10px" }}>{err}</div>}
+        <button onClick={save} disabled={!valid || busy} style={{ width: "100%", background: C.ink, color: C.paper, border: "none", borderRadius: 12, padding: "13px", cursor: valid && !busy ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 15, opacity: valid && !busy ? 1 : 0.45 }}>{busy ? "Saving…" : "Save new password"}</button>
       </div>
     </Screen>
   );
@@ -1026,15 +1125,21 @@ function ConfigScreen() {
 
 export default function App() {
   const [session, setSession] = useState(undefined);
+  const [recovery, setRecovery] = useState(false);
   useEffect(() => {
     if (!supabase) { setSession(null); return; }
     supabase.auth.getSession().then(({ data }) => { authState.uid = data.session?.user?.id || null; setSession(data.session || null); });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => { authState.uid = s?.user?.id || null; setSession(s || null); });
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      authState.uid = s?.user?.id || null;
+      setSession(s || null);
+      if (event === "PASSWORD_RECOVERY") setRecovery(true);
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
   const signOut = async () => { try { await supabase.auth.signOut(); } catch {} };
   if (!supabase) return <ConfigScreen />;
   if (session === undefined) return <Screen><div style={{ textAlign: "center", color: C.inkSoft }}>Loading…</div></Screen>;
+  if (recovery && session) return <UpdatePasswordScreen onDone={() => setRecovery(false)} />;
   if (!session) return <AuthScreen />;
   return <MainApp key={session.user.id} userEmail={session.user.email} onSignOut={signOut} />;
 }
