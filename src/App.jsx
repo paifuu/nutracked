@@ -971,6 +971,7 @@ function AuthScreen() {
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [dupHint, setDupHint] = useState(false);
 
   const rules = pwRules(pw);
   const pwValid = rules.every((r) => r.ok);
@@ -987,7 +988,11 @@ function AuthScreen() {
         if (error) setErr(error.message);
       } else if (mode === "signup") {
         const { data, error } = await supabase.auth.signUp({ email, password: pw });
-        if (error) setErr(error.message);
+        // Supabase hides "email taken" for privacy: an existing email returns a user with an empty identities array.
+        const alreadyExists = (error && /already|registered|exists/i.test(error.message)) ||
+          (!error && data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0);
+        if (alreadyExists) { setDupHint(true); setMsg("An account with this email may already exist. Try signing in, or reset your password."); }
+        else if (error) setErr(error.message);
         else if (!data.session) setMsg("Account created. Check your email to confirm, then sign in.");
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
@@ -997,7 +1002,7 @@ function AuthScreen() {
     } catch { setErr("Something went wrong. Please try again."); }
     setBusy(false);
   };
-  const go = (m) => { setMode(m); setErr(""); setMsg(""); };
+  const go = (m) => { setMode(m); setErr(""); setMsg(""); setDupHint(false); };
 
   const inp = { width: "100%", border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 13px", fontSize: 15, color: C.ink, outline: "none", background: "#fff" };
   const heading = mode === "signin" ? "Sign in" : mode === "signup" ? "Create your account" : "Reset your password";
@@ -1018,7 +1023,7 @@ function AuthScreen() {
 
         <label style={{ display: "block", marginBottom: mode === "reset" ? 14 : 12 }}>
           <div style={{ fontSize: 12, color: C.inkSoft, fontWeight: 600, marginBottom: 6 }}>Email</div>
-          <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" onKeyDown={(e) => e.key === "Enter" && submit()} style={inp} />
+          <input type="email" autoComplete="email" value={email} onChange={(e) => { setEmail(e.target.value); setDupHint(false); }} placeholder="you@example.com" onKeyDown={(e) => e.key === "Enter" && submit()} style={inp} />
         </label>
 
         {mode !== "reset" && (
@@ -1048,6 +1053,13 @@ function AuthScreen() {
 
         {err && <div style={{ color: C.warn, fontSize: 13, marginBottom: 12, marginTop: 6, background: "#fdf3f1", border: `1px solid ${C.warn}44`, borderRadius: 10, padding: "8px 10px" }}>{err}</div>}
         {msg && <div style={{ color: C.good, fontSize: 13, marginBottom: 12, marginTop: 6, background: "#f1f7f3", border: `1px solid ${C.good}44`, borderRadius: 10, padding: "8px 10px" }}>{msg}</div>}
+
+        {dupHint && mode === "signup" && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <button onClick={() => go("signin")} style={{ flex: 1, background: C.paper, border: `1px solid ${C.line}`, borderRadius: 10, padding: "10px", cursor: "pointer", color: C.ink, fontWeight: 600, fontSize: 13 }}>Sign in</button>
+            <button onClick={() => go("reset")} style={{ flex: 1, background: C.paper, border: `1px solid ${C.line}`, borderRadius: 10, padding: "10px", cursor: "pointer", color: C.ink, fontWeight: 600, fontSize: 13 }}>Reset password</button>
+          </div>
+        )}
 
         <button onClick={submit} disabled={!canSubmit} style={{ width: "100%", marginTop: 6, background: C.ink, color: C.paper, border: "none", borderRadius: 12, padding: "13px", cursor: canSubmit ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 15, opacity: canSubmit ? 1 : 0.45, transition: "opacity .15s" }}>{cta}</button>
       </div>
